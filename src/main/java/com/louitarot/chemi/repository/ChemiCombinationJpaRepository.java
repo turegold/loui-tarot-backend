@@ -1,5 +1,6 @@
-package com.louitarot.chemi.adapter.out.persistence;
+package com.louitarot.chemi.repository;
 
+import com.louitarot.chemi.entity.ChemiCombinationEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

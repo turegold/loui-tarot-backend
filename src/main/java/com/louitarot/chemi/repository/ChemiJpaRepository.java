@@ -1,5 +1,6 @@
-package com.louitarot.chemi.adapter.out.persistence;
+package com.louitarot.chemi.repository;
 
+import com.louitarot.chemi.entity.ChemiEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

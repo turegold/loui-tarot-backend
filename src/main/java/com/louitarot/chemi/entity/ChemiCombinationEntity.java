@@ -1,4 +1,4 @@
-package com.louitarot.chemi.adapter.out.persistence;
+package com.louitarot.chemi.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

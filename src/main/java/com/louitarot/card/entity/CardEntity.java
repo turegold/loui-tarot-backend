@@ -3,7 +3,7 @@ package com.louitarot.card.entity;
 import com.louitarot.card.domain.ArcanaType;
 import com.louitarot.card.domain.Element;
 import com.louitarot.card.domain.Suit;
-import com.louitarot.common.persistence.BaseTimeEntity;
+import com.louitarot.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
