@@ -1,0 +1,20 @@
+# 공통 설정 — 프로필(local/prod) 무관하게 항상 적용
+# 실제 접속 정보/시크릿은 여기 두지 않는다 (백엔드 설계 원칙 9번) — application-{profile}.yml에서 채운다.
+spring:
+  application:
+    name: loui-tarot-backend
+  profiles:
+    active: local # 배포 환경(ECS 태스크 정의)에서는 SPRING_PROFILES_ACTIVE=prod로 덮어씀
+
+server:
+  port: 8080
+
+# 백엔드 설계 원칙 7번(관측 가능성) — 최소한의 헬스체크/정보 엔드포인트만 공개
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

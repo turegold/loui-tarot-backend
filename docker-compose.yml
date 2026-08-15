@@ -1,0 +1,37 @@
+# 로컬 개발 전용. application-local.yml의 접속 정보와 정확히 맞춰뒀다 —
+# 이 compose로 띄우기만 하면 애플리케이션이 별도 설정 없이 바로 붙는다.
+# 호스트 포트가 3306/6379 기본값이 아니라 3309/6380인 이유: 이 머신에 이미 다른 프로젝트가
+# 그 포트를 쓰고 있어서 충돌 회피용으로 옮김 (컨테이너 내부 포트는 표준 그대로).
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: loui-tarot-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: loui_tarot
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4
+    container_name: loui-tarot-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
