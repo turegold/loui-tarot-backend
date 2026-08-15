@@ -1,4 +1,4 @@
-package com.louitarot.fortune.adapter.out.persistence;
+package com.louitarot.fortune.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

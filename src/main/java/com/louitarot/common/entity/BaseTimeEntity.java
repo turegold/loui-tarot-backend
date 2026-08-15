@@ -1,4 +1,4 @@
-package com.louitarot.common.persistence;
+package com.louitarot.common.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;

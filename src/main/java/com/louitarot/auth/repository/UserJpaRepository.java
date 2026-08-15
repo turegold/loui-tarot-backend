@@ -1,5 +1,6 @@
-package com.louitarot.auth.adapter.out.persistence;
+package com.louitarot.auth.repository;
 
+import com.louitarot.auth.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

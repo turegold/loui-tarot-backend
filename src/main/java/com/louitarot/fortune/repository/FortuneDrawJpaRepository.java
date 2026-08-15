@@ -1,5 +1,6 @@
-package com.louitarot.fortune.adapter.out.persistence;
+package com.louitarot.fortune.repository;
 
+import com.louitarot.fortune.entity.FortuneDrawEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

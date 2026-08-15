@@ -1,7 +1,7 @@
-package com.louitarot.fortune.adapter.out.persistence;
+package com.louitarot.fortune.entity;
 
 import com.louitarot.common.domain.Topic;
-import com.louitarot.common.persistence.BaseTimeEntity;
+import com.louitarot.common.entity.BaseTimeEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
