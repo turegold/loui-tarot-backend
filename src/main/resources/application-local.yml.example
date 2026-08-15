@@ -3,7 +3,7 @@
 # application-local.yml 자체는 .gitignore에 포함돼 있어 커밋되지 않는다.
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/loui_tarot?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    url: jdbc:mysql://localhost:3309/loui_tarot?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: your-local-mysql-username
     password: your-local-mysql-password
   jpa:
@@ -16,7 +16,7 @@ spring:
   data:
     redis:
       host: localhost
-      port: 6379
+      port: 6380
 
 # 아직 코드에서 안 읽지만, 카카오 로그인/JWT 구현 시 바로 쓰도록 미리 shape만 잡아둠
 jwt:
