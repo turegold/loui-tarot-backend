@@ -14,7 +14,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when-authorized
+
+# 콘솔에 사람이 읽는 텍스트 대신 JSON 한 줄씩 출력 — 나중에 Promtail이 파싱해서 Loki로 보내는 걸 전제로 함
+logging:
+  structured:
+    format:
+      console: logstash
