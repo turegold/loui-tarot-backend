@@ -1,0 +1,28 @@
+# 운영 설정 — 실제 값은 전부 환경변수에서 주입받는다 (ECS 태스크 정의에서 설정).
+# 여기엔 절대 실제 시크릿 값을 적지 않는다 (백엔드 설계 원칙 9번).
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate # prod는 스키마를 자동으로 건드리지 않는다 — DB 스키마.md의 DDL이 진실의 원천
+    show-sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:3600000}
+  refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:1209600000}
+
+kakao:
+  client-id: ${KAKAO_CLIENT_ID}
+  redirect-uri: ${KAKAO_REDIRECT_URI}
+
+logging:
+  level:
+    com.louitarot: INFO
