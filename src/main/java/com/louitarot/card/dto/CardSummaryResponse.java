@@ -1,6 +1,6 @@
-package com.louitarot.card.adapter.in.web;
+package com.louitarot.card.dto;
 
-import com.louitarot.card.adapter.out.persistence.CardEntity;
+import com.louitarot.card.entity.CardEntity;
 import com.louitarot.card.domain.ArcanaType;
 import com.louitarot.card.domain.Element;
 import com.louitarot.card.domain.Suit;

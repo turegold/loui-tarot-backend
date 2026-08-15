@@ -1,4 +1,4 @@
-package com.louitarot.card.adapter.out.persistence;
+package com.louitarot.card.entity;
 
 import com.louitarot.common.domain.Topic;
 import jakarta.persistence.Column;

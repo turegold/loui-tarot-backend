@@ -1,4 +1,4 @@
-package com.louitarot.card.adapter.out.persistence;
+package com.louitarot.card.entity;
 
 import com.louitarot.card.domain.ArcanaType;
 import com.louitarot.card.domain.Element;
