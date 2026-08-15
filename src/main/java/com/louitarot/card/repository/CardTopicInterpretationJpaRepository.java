@@ -1,5 +1,6 @@
-package com.louitarot.card.adapter.out.persistence;
+package com.louitarot.card.repository;
 
+import com.louitarot.card.entity.CardTopicInterpretationEntity;
 import com.louitarot.common.domain.Topic;
 import org.springframework.data.jpa.repository.JpaRepository;
 
