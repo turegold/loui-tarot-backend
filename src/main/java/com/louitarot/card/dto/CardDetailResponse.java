@@ -14,6 +14,7 @@ public record CardDetailResponse(
         ArcanaType arcanaType,
         Suit suit,
         Element element,
+        Short number,
         String imageUrl,
         String uprightInterpretation,
         String reversedInterpretation
@@ -23,7 +24,7 @@ public record CardDetailResponse(
         CardEntity card = detail.card();
         return new CardDetailResponse(
                 card.getId(), card.getNameKr(), card.getNameEn(), card.getArcanaType(),
-                card.getSuit(), card.getElement(), card.getImageUrl(),
+                card.getSuit(), card.getElement(), card.getNumber(), card.getImageUrl(),
                 detail.uprightInterpretation(), detail.reversedInterpretation());
     }
 }
