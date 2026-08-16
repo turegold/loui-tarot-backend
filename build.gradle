@@ -25,6 +25,12 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	// Jackson이 아니라 Gson을 씀 — Spring Boot 4.1은 Jackson 3(tools.jackson)을 쓰는데,
+	// jjwt-jackson은 구버전 Jackson 2(com.fasterxml.jackson)를 끌고 와서 불필요한 버전 혼재가 생김.
+	// jjwt-gson은 아예 별개 JSON 라이브러리라 이 문제를 원천적으로 피한다.
+	runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.12.6'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'
