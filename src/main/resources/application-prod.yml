@@ -24,6 +24,11 @@ kakao:
   client-secret: ${KAKAO_CLIENT_SECRET:}
   redirect-uri: ${KAKAO_REDIRECT_URI}
 
+ai:
+  nvidia:
+    api-key: ${NVIDIA_API_KEY}
+    model: ${NVIDIA_AI_MODEL:google/gemma-4-31b-it}
+
 logging:
   level:
     com.louitarot: INFO

@@ -29,6 +29,11 @@ kakao:
   client-secret: # Client Secret 사용이 콘솔에서 꺼져 있으면 비워둔다
   redirect-uri: http://localhost:3001/login/kakao/callback
 
+ai:
+  nvidia:
+    api-key: your-nvidia-api-key # build.nvidia.com에서 발급
+    model: google/gemma-4-31b-it
+
 logging:
   level:
     com.louitarot: DEBUG
