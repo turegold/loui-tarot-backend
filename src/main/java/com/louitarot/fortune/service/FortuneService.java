@@ -15,10 +15,13 @@ import com.louitarot.common.util.SlugGenerator;
 import com.louitarot.fortune.domain.SpreadTheme;
 import com.louitarot.fortune.dto.FortuneCardResponse;
 import com.louitarot.fortune.dto.FortuneDrawResponse;
+import com.louitarot.fortune.dto.FortuneSummaryResponse;
 import com.louitarot.fortune.entity.FortuneDrawCardEntity;
 import com.louitarot.fortune.entity.FortuneDrawEntity;
 import com.louitarot.fortune.repository.FortuneDrawJpaRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -101,6 +104,25 @@ public class FortuneService {
                 .toList();
 
         return FortuneDrawResponse.of(draw, cards, draw.getOverallInterpretationText(), user.getNickname());
+    }
+
+    /** 마이페이지 "내 기록" 목록. 해석 텍스트는 담지 않아 AI/캐시 조회 없이 가볍게 응답한다. */
+    @Transactional(readOnly = true)
+    public Page<FortuneSummaryResponse> getMyFortunes(Long userId, Pageable pageable) {
+        return fortuneDrawJpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(this::toSummary);
+    }
+
+    private FortuneSummaryResponse toSummary(FortuneDrawEntity draw) {
+        SpreadTheme theme = SpreadTheme.fromKey(draw.getSpreadThemeKey());
+        List<FortuneCardResponse> cards = draw.getCards().stream()
+                .map(drawCard -> new FortuneCardResponse(
+                        theme.labelAt(drawCard.getPositionIndex()),
+                        CardBriefResponse.from(findCard(drawCard.getCardId())),
+                        drawCard.isReversed(),
+                        null))
+                .toList();
+        return FortuneSummaryResponse.from(draw, cards);
     }
 
     private FortuneCardResponse buildCardResponse(CardEntity card, boolean reversed, Topic topic, String positionLabel) {
