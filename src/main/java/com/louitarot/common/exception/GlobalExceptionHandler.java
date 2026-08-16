@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -71,7 +72,22 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * ④ 위 셋 중 아무것도 안 걸리는 나머지 전부(진짜 버그, DB 커넥션 끊김 등).
+     * ④ 요청 바디 JSON 자체는 문법적으로 읽었지만, 값이 기대하는 타입과 안 맞을 때
+     * (예: {@code topic}에 enum에 없는 문자열, 숫자 자리에 문자열 등). @Valid보다 앞서
+     * JSON→객체 역직렬화 단계에서 터지는 예외라 MethodArgumentNotValidException으로는 안 잡힌다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(HttpMessageNotReadableException e) {
+        log.warn("[{}] {}", ErrorCode.COMMON_INVALID_REQUEST.name(), e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.COMMON_INVALID_REQUEST.getStatus())
+                .body(ApiResponse.fail(ApiError.of(
+                        ErrorCode.COMMON_INVALID_REQUEST.name(),
+                        ErrorCode.COMMON_INVALID_REQUEST.getDefaultMessage())));
+    }
+
+    /**
+     * ⑤ 위 넷 중 아무것도 안 걸리는 나머지 전부(진짜 버그, DB 커넥션 끊김 등).
      * 여기까지 흘러왔다는 것 자체가 "예상 못 했다"는 뜻이라 ERROR + 스택트레이스로 남긴다.
      * 이 핸들러가 없으면 예상 못 한 예외는 우리 응답 포맷이 아니라 스프링 기본 에러 페이지로
      * 나가버린다 — 그래서 Exception.class(가장 넓은 타입)까지 반드시 잡아둔다.
