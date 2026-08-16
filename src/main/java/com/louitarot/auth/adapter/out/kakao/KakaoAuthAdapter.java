@@ -91,8 +91,15 @@ public class KakaoAuthAdapter implements KakaoAuthPort {
         KakaoUserResponse.KakaoAccount.Profile profile = response.kakaoAccount() != null
                 ? response.kakaoAccount().profile()
                 : null;
-        String nickname = profile != null ? profile.nickname() : null;
-        String profileImageUrl = profile != null ? profile.profileImageUrl() : null;
+        KakaoUserResponse.Properties properties = response.properties();
+
+        // kakao_account.profile은 동의항목 설정에 따라 비어 있을 수 있어, 레거시 properties를 폴백으로 쓴다.
+        String nickname = profile != null && profile.nickname() != null
+                ? profile.nickname()
+                : (properties != null ? properties.nickname() : null);
+        String profileImageUrl = profile != null && profile.profileImageUrl() != null
+                ? profile.profileImageUrl()
+                : (properties != null ? properties.profileImage() : null);
 
         return new KakaoUserInfo(response.id(), nickname, profileImageUrl);
     }

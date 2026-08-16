@@ -27,7 +27,7 @@ jwt:
 kakao:
   client-id: your-kakao-rest-api-key
   client-secret: # Client Secret 사용이 콘솔에서 꺼져 있으면 비워둔다
-  redirect-uri: http://localhost:3000/login/kakao/callback
+  redirect-uri: http://localhost:3001/login/kakao/callback
 
 logging:
   level:
