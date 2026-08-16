@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -85,7 +86,14 @@ public class ChemiService {
         return ChemiDrawDetailResponse.withoutChemi(draw, card, interpretation, shareUrl(draw.getSlug()));
     }
 
-    /** 방장의 공유 링크로 들어온 게스트의 뽑기. 뽑는 즉시 host와의 케미도 함께 계산한다. */
+    /**
+     * 방장의 공유 링크로 들어온 게스트의 뽑기. 뽑는 즉시 host와의 케미도 함께 계산한다.
+     *
+     * 게스트 카드 해석과 케미 조합 해석은 서로 독립적인 AI 호출이라(fortune과 동일한 이유,
+     * 호출 하나당 수 초~십수 초) 순차 실행 대신 병렬로 돌려 응답 시간을 최대 절반으로 줄인다.
+     * DB 접근(캐시 조회/저장)은 트랜잭션이 걸린 메인 스레드에서만 하고, 병렬 스레드는 순수
+     * AI 호출만 하도록 나눴다.
+     */
     @Transactional
     public ChemiGuestDrawResponse createGuestDraw(String hostSlug, String nickname, String ipHash) {
         ChemiDrawEntity hostDraw = chemiDrawJpaRepository.findBySlug(hostSlug)
@@ -98,9 +106,34 @@ public class ChemiService {
                 generateUniqueSlug(), null, nickname, guestCard.getId(), guestReversed, ipHash);
         chemiDrawJpaRepository.save(guestDraw);
 
-        String guestInterpretation = getOrGenerateCardInterpretation(guestCard, guestReversed);
-        ChemiCombinationEntity combination = getOrGenerateCombination(
-                hostCard, hostDraw.isReversed(), guestCard, guestReversed);
+        // 1) 캐시 조회부터 메인 스레드에서 끝낸다.
+        String cachedGuestText = findCachedCardInterpretation(guestCard, guestReversed);
+        NormalizedPair normalized = normalizeOrder(
+                hostCard.getId(), hostDraw.isReversed(), guestCard.getId(), guestReversed);
+        ChemiCombinationEntity cachedCombination = findCombination(normalized).orElse(null);
+        short score = ChemiScoreCalculator.calculate(hostCard, hostDraw.isReversed(), guestCard, guestReversed);
+
+        // 2) 캐시 미스인 것만 병렬로 AI 호출.
+        CompletableFuture<String> guestTextFuture = cachedGuestText != null
+                ? CompletableFuture.completedFuture(cachedGuestText)
+                : CompletableFuture.supplyAsync(() -> generateCardInterpretationText(guestCard, guestReversed));
+        CompletableFuture<String> combinationTextFuture = cachedCombination != null
+                ? CompletableFuture.completedFuture(cachedCombination.getInterpretationText())
+                : CompletableFuture.supplyAsync(() ->
+                        generateCombinationText(hostCard, hostDraw.isReversed(), guestCard, guestReversed, score));
+
+        String guestInterpretation = guestTextFuture.join();
+        String combinationInterpretation = combinationTextFuture.join();
+
+        // 3) 새로 생성된 것만 메인 스레드로 돌아와 캐시에 저장.
+        if (cachedGuestText == null) {
+            cacheCardInterpretation(guestCard, guestReversed, guestInterpretation);
+        }
+        ChemiCombinationEntity combination = cachedCombination != null
+                ? cachedCombination
+                : cacheCombination(hostCard.getId(), hostDraw.isReversed(), guestCard.getId(), guestReversed,
+                        score, combinationInterpretation, normalized);
+
         chemiJpaRepository.save(new ChemiEntity(hostDraw, guestDraw, combination, combination.getScore()));
 
         return new ChemiGuestDrawResponse(
@@ -166,37 +199,46 @@ public class ChemiService {
         return frontendUrl + "/chemi/" + slug;
     }
 
+    /** 순차 경로(방장 뽑기, 단건 조회)용 — 캐시 조회, 미스면 생성+저장까지 한 번에. */
     private String getOrGenerateCardInterpretation(CardEntity card, boolean reversed) {
-        return cardInterpretationJpaRepository.findByCardIdAndReversed(card.getId(), reversed)
-                .map(CardInterpretationEntity::getInterpretationText)
-                .orElseGet(() -> generateAndCacheCardInterpretation(card, reversed));
+        String cachedText = findCachedCardInterpretation(card, reversed);
+        if (cachedText != null) {
+            return cachedText;
+        }
+        String text = generateCardInterpretationText(card, reversed);
+        cacheCardInterpretation(card, reversed, text);
+        return text;
     }
 
-    private String generateAndCacheCardInterpretation(CardEntity card, boolean reversed) {
+    /** 캐시 조회만(DB 읽기). 미스면 null. */
+    private String findCachedCardInterpretation(CardEntity card, boolean reversed) {
+        return cardInterpretationJpaRepository.findByCardIdAndReversed(card.getId(), reversed)
+                .map(CardInterpretationEntity::getInterpretationText)
+                .orElse(null);
+    }
+
+    /** 순수 AI 호출만. DB에 손대지 않아 병렬 스레드에서 안전하게 실행할 수 있다. */
+    private String generateCardInterpretationText(CardEntity card, boolean reversed) {
         String prompt = "당신은 타로 카드 해석가입니다. '%s' 카드가 %s으로 나왔을 때의 일반적인 의미를 2~3문장으로 해석해주세요."
                 .formatted(card.getNameKr(), reversed ? "역방향" : "정방향");
-        String text = aiInterpretationPort.generate(prompt);
+        return aiInterpretationPort.generate(prompt);
+    }
+
+    /** 새로 생성된 해석을 캐시에 저장 — 반드시 메인(트랜잭션) 스레드에서 호출해야 한다. */
+    private void cacheCardInterpretation(CardEntity card, boolean reversed, String text) {
         try {
             cardInterpretationJpaRepository.save(new CardInterpretationEntity(card.getId(), reversed, text));
-            return text;
         } catch (DataIntegrityViolationException e) {
-            // 같은 (카드, 방향) 조합을 동시에 처음 요청한 다른 트랜잭션과 경합 — 먼저 저장된 캐시를 그대로 쓴다.
-            return cardInterpretationJpaRepository.findByCardIdAndReversed(card.getId(), reversed)
-                    .map(CardInterpretationEntity::getInterpretationText)
-                    .orElseThrow(() -> e);
+            // 같은 (카드, 방향) 조합을 동시에 처음 요청한 다른 트랜잭션과 경합 — 먼저 저장된 캐시가 있으면 무시하고 넘어간다.
+            if (findCachedCardInterpretation(card, reversed) == null) {
+                throw e;
+            }
         }
     }
 
-    private ChemiCombinationEntity getOrGenerateCombination(
-            CardEntity cardA, boolean reversedA, CardEntity cardB, boolean reversedB) {
-        NormalizedPair normalized = normalizeOrder(cardA.getId(), reversedA, cardB.getId(), reversedB);
-        return findCombination(normalized)
-                .orElseGet(() -> generateAndCacheCombination(cardA, reversedA, cardB, reversedB, normalized));
-    }
-
-    private ChemiCombinationEntity generateAndCacheCombination(
-            CardEntity cardA, boolean reversedA, CardEntity cardB, boolean reversedB, NormalizedPair normalized) {
-        short score = ChemiScoreCalculator.calculate(cardA, reversedA, cardB, reversedB);
+    /** 순수 AI 호출만(점수는 이미 계산돼 있다고 가정). DB에 손대지 않는다. */
+    private String generateCombinationText(
+            CardEntity cardA, boolean reversedA, CardEntity cardB, boolean reversedB, short score) {
         String prompt = """
                 당신은 타로 궁합 해석가입니다. 두 사람이 각각 뽑은 카드는 '%s'(%s)와 '%s'(%s)이고, \
                 궁합 점수는 %d점으로 '%s' 등급입니다. 두 사람의 케미를 2~3문장으로 따뜻하고 재미있게 해석해주세요.\
@@ -204,9 +246,14 @@ public class ChemiService {
                         cardA.getNameKr(), reversedA ? "역방향" : "정방향",
                         cardB.getNameKr(), reversedB ? "역방향" : "정방향",
                         score, toneLabel(score));
-        String text = aiInterpretationPort.generate(prompt);
-        ChemiCombinationEntity combination = ChemiCombinationEntity.normalize(
-                cardA.getId(), reversedA, cardB.getId(), reversedB, score, text);
+        return aiInterpretationPort.generate(prompt);
+    }
+
+    /** 새로 생성된 조합 해석을 캐시에 저장 — 반드시 메인(트랜잭션) 스레드에서 호출해야 한다. */
+    private ChemiCombinationEntity cacheCombination(
+            Short cardAId, boolean reversedA, Short cardBId, boolean reversedB,
+            short score, String text, NormalizedPair normalized) {
+        ChemiCombinationEntity combination = ChemiCombinationEntity.normalize(cardAId, reversedA, cardBId, reversedB, score, text);
         try {
             return chemiCombinationJpaRepository.save(combination);
         } catch (DataIntegrityViolationException e) {
