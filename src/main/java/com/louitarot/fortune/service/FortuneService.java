@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -59,7 +60,14 @@ public class FortuneService {
         this.aiInterpretationPort = aiInterpretationPort;
     }
 
-    /** 3장을 한 번에 뽑아 카드별 해석 + 종합 해석까지 함께 생성한다. */
+    /**
+     * 3장을 한 번에 뽑아 카드별 해석 + 종합 해석까지 함께 생성한다.
+     *
+     * AI 호출 4개(카드 3장 + 종합)를 순차로 하면 호출 하나당 수 초~십수 초가 걸려 응답이
+     * 최대 4배로 느려진다(실측 47초). 넷 다 서로 독립적인 호출이라 병렬로 실행해서
+     * 가장 느린 호출 하나만큼의 시간으로 줄인다 — 단, DB 접근(캐시 조회/저장)은 트랜잭션이
+     * 묶인 메인 스레드에서만 하고, 병렬 스레드는 순수 AI 호출(네트워크 I/O)만 하도록 분리했다.
+     */
     @Transactional
     public FortuneDrawResponse createDraw(Long userId, Topic topic) {
         if (!userJpaRepository.existsById(userId)) {
@@ -72,11 +80,42 @@ public class FortuneService {
                 .map(card -> ThreadLocalRandom.current().nextBoolean())
                 .toList();
 
+        // 1) 캐시 조회부터 메인 스레드에서 순차로 끝낸다 — 캐시 히트면 AI 호출 자체가 필요 없다.
+        List<String> cached = new ArrayList<>(SPREAD_SIZE);
+        for (int i = 0; i < SPREAD_SIZE; i++) {
+            cached.add(findCachedCardTopicInterpretation(pickedCards.get(i), reversedFlags.get(i), topic));
+        }
+
+        // 2) 캐시 미스인 카드 + 종합 해석만 AI 호출이 필요하다 — 서로 독립적이니 병렬로 실행한다.
+        List<CompletableFuture<String>> cardTextFutures = new ArrayList<>(SPREAD_SIZE);
+        for (int i = 0; i < SPREAD_SIZE; i++) {
+            String cachedText = cached.get(i);
+            if (cachedText != null) {
+                cardTextFutures.add(CompletableFuture.completedFuture(cachedText));
+                continue;
+            }
+            CardEntity card = pickedCards.get(i);
+            boolean reversed = reversedFlags.get(i);
+            cardTextFutures.add(CompletableFuture.supplyAsync(() -> generateCardTopicInterpretationText(card, reversed, topic)));
+        }
+        CompletableFuture<String> overallFuture = CompletableFuture.supplyAsync(
+                () -> generateOverallInterpretation(topic, theme, pickedCards, reversedFlags));
+
+        List<String> cardTexts = cardTextFutures.stream().map(CompletableFuture::join).toList();
+        String overallInterpretation = overallFuture.join();
+
+        // 3) 새로 생성된 것만 메인 스레드로 돌아와 캐시에 저장한다.
+        for (int i = 0; i < SPREAD_SIZE; i++) {
+            if (cached.get(i) == null) {
+                cacheCardTopicInterpretation(pickedCards.get(i), reversedFlags.get(i), topic, cardTexts.get(i));
+            }
+        }
+
         List<FortuneCardResponse> cardResponses = new ArrayList<>(SPREAD_SIZE);
         for (int i = 0; i < SPREAD_SIZE; i++) {
-            cardResponses.add(buildCardResponse(pickedCards.get(i), reversedFlags.get(i), topic, theme.labelAt(i)));
+            cardResponses.add(new FortuneCardResponse(
+                    theme.labelAt(i), CardBriefResponse.from(pickedCards.get(i)), reversedFlags.get(i), cardTexts.get(i)));
         }
-        String overallInterpretation = generateOverallInterpretation(topic, theme, pickedCards, reversedFlags);
 
         FortuneDrawEntity draw = new FortuneDrawEntity(
                 generateUniqueSlug(), userId, topic, theme.key(), overallInterpretation);
@@ -149,25 +188,41 @@ public class FortuneService {
         return slug;
     }
 
+    /** 순차 경로(getDraw)용 — 캐시 조회, 미스면 생성+저장까지 한 번에. */
     private String getOrGenerateCardTopicInterpretation(CardEntity card, boolean reversed, Topic topic) {
-        return cardTopicInterpretationJpaRepository.findByCardIdAndReversedAndTopic(card.getId(), reversed, topic)
-                .map(CardTopicInterpretationEntity::getInterpretationText)
-                .orElseGet(() -> generateAndCacheCardTopicInterpretation(card, reversed, topic));
+        String cachedText = findCachedCardTopicInterpretation(card, reversed, topic);
+        if (cachedText != null) {
+            return cachedText;
+        }
+        String text = generateCardTopicInterpretationText(card, reversed, topic);
+        cacheCardTopicInterpretation(card, reversed, topic, text);
+        return text;
     }
 
-    private String generateAndCacheCardTopicInterpretation(CardEntity card, boolean reversed, Topic topic) {
+    /** 캐시 조회만(DB 읽기). 미스면 null — AI 호출은 하지 않는다. */
+    private String findCachedCardTopicInterpretation(CardEntity card, boolean reversed, Topic topic) {
+        return cardTopicInterpretationJpaRepository.findByCardIdAndReversedAndTopic(card.getId(), reversed, topic)
+                .map(CardTopicInterpretationEntity::getInterpretationText)
+                .orElse(null);
+    }
+
+    /** 순수 AI 호출(네트워크 I/O)만. DB에 손대지 않아 병렬 스레드에서 안전하게 실행할 수 있다. */
+    private String generateCardTopicInterpretationText(CardEntity card, boolean reversed, Topic topic) {
         String prompt = "당신은 타로 카드 해석가입니다. '%s' 카드가 %s으로 나왔을 때, '%s' 관점에서 2~3문장으로 해석해주세요."
                 .formatted(card.getNameKr(), reversed ? "역방향" : "정방향", topic.label());
-        String text = aiInterpretationPort.generate(prompt);
+        return aiInterpretationPort.generate(prompt);
+    }
+
+    /** 새로 생성된 해석을 캐시에 저장(DB 쓰기) — 반드시 메인(트랜잭션) 스레드에서 호출해야 한다. */
+    private void cacheCardTopicInterpretation(CardEntity card, boolean reversed, Topic topic, String text) {
         try {
             cardTopicInterpretationJpaRepository.save(
                     new CardTopicInterpretationEntity(card.getId(), reversed, topic, text));
-            return text;
         } catch (DataIntegrityViolationException e) {
-            // 같은 (카드, 방향, 주제) 조합을 동시에 처음 요청한 다른 트랜잭션과 경합 — 먼저 저장된 캐시를 그대로 쓴다.
-            return cardTopicInterpretationJpaRepository.findByCardIdAndReversedAndTopic(card.getId(), reversed, topic)
-                    .map(CardTopicInterpretationEntity::getInterpretationText)
-                    .orElseThrow(() -> e);
+            // 같은 (카드, 방향, 주제) 조합을 동시에 처음 요청한 다른 트랜잭션과 경합 — 먼저 저장된 캐시가 있으면 무시하고 넘어간다.
+            if (findCachedCardTopicInterpretation(card, reversed, topic) == null) {
+                throw e;
+            }
         }
     }
 
