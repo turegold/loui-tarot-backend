@@ -13,6 +13,7 @@ import com.louitarot.chemi.dto.ChemiDrawSummaryResponse;
 import com.louitarot.chemi.dto.ChemiGuestDrawResponse;
 import com.louitarot.chemi.dto.ChemiRankingItemResponse;
 import com.louitarot.chemi.dto.ChemiResultResponse;
+import com.louitarot.chemi.dto.ChemiSummaryResponse;
 import com.louitarot.chemi.entity.ChemiCombinationEntity;
 import com.louitarot.chemi.entity.ChemiDrawEntity;
 import com.louitarot.chemi.entity.ChemiEntity;
@@ -175,6 +176,13 @@ public class ChemiService {
                         chemi.getGuestDraw().getNickname(),
                         CardBriefResponse.from(findCard(chemi.getGuestDraw().getCardId())),
                         chemi.getScore()));
+    }
+
+    /** 마이페이지 "내 기록"의 케미 뽑기 목록 — 로그인 방장으로 뽑은 것만(게스트 draw는 대상 아님). */
+    @Transactional(readOnly = true)
+    public Page<ChemiSummaryResponse> getMyChemiDraws(Long userId, Pageable pageable) {
+        return chemiDrawJpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(draw -> ChemiSummaryResponse.from(draw, findCard(draw.getCardId())));
     }
 
     private CardEntity pickRandomCard() {

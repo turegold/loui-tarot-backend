@@ -3,6 +3,8 @@ package com.louitarot.auth.controller;
 import com.louitarot.auth.dto.UpdateNicknameRequest;
 import com.louitarot.auth.dto.UserSummaryResponse;
 import com.louitarot.auth.service.UserService;
+import com.louitarot.chemi.dto.ChemiSummaryResponse;
+import com.louitarot.chemi.service.ChemiService;
 import com.louitarot.common.response.ApiMeta;
 import com.louitarot.common.response.ApiResponse;
 import com.louitarot.fortune.dto.FortuneSummaryResponse;
@@ -27,10 +29,12 @@ public class UserController {
 
     private final UserService userService;
     private final FortuneService fortuneService;
+    private final ChemiService chemiService;
 
-    public UserController(UserService userService, FortuneService fortuneService) {
+    public UserController(UserService userService, FortuneService fortuneService, ChemiService chemiService) {
         this.userService = userService;
         this.fortuneService = fortuneService;
+        this.chemiService = chemiService;
     }
 
     @GetMapping("/me")
@@ -54,6 +58,18 @@ public class UserController {
     ) {
         Long userId = (Long) authentication.getPrincipal();
         Page<FortuneSummaryResponse> result = fortuneService.getMyFortunes(userId, PageRequest.of(page - 1, size));
+        return ApiResponse.success(result.getContent(), ApiMeta.of(page, size, result.getTotalElements()));
+    }
+
+    /** 로그인 방장으로 시작한 케미 뽑기 기록만 — 게스트로 참여한 건 계정에 안 묶여서 대상이 아니다. */
+    @GetMapping("/me/chemi-draws")
+    public ApiResponse<List<ChemiSummaryResponse>> getMyChemiDraws(
+            Authentication authentication,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        Page<ChemiSummaryResponse> result = chemiService.getMyChemiDraws(userId, PageRequest.of(page - 1, size));
         return ApiResponse.success(result.getContent(), ApiMeta.of(page, size, result.getTotalElements()));
     }
 }
