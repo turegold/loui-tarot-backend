@@ -18,4 +18,10 @@ public interface ChemiJpaRepository extends JpaRepository<ChemiEntity, Long> {
 
     /** 같은 게스트가 같은 방장에게 중복으로 케미를 만들지 않았는지 확인할 때 (uq_host_guest와 대응). */
     Optional<ChemiEntity> findByHostDrawIdAndGuestDrawId(Long hostDrawId, Long guestDrawId);
+
+    /**
+     * GET /chemi-draws/{slug}에서 "이 draw가 게스트로 참여한 적이 있는지" 확인할 때.
+     * 게스트 뽑기는 한 번에 host 하나와만 짝지어지므로(생성 시점에 즉시 1건만 만들어짐) 0~1건.
+     */
+    Optional<ChemiEntity> findByGuestDrawId(Long guestDrawId);
 }

@@ -24,8 +24,8 @@ public record ChemiDrawDetailResponse(
         ChemiResultResponse chemi
 ) {
 
-    /** 방장이 막 뽑은 직후 — 아직 케미 상대가 없다. */
-    public static ChemiDrawDetailResponse hostCreated(
+    /** 아직 케미 상대가 없는 상태 — 방금 뽑은 방장 draw이거나, 게스트로 참여한 적 없는 draw를 조회한 경우. */
+    public static ChemiDrawDetailResponse withoutChemi(
             ChemiDrawEntity draw, CardEntity card, String interpretation, String shareUrl) {
         return new ChemiDrawDetailResponse(
                 draw.getSlug(), draw.getNickname(), CardBriefResponse.from(card), draw.isReversed(),
