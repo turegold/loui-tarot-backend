@@ -13,6 +13,7 @@ public record CardSummaryResponse(
         ArcanaType arcanaType,
         Suit suit,
         Element element,
+        Short number,
         String imageUrl,
         String seoSlug
 ) {
@@ -20,6 +21,6 @@ public record CardSummaryResponse(
     public static CardSummaryResponse from(CardEntity card) {
         return new CardSummaryResponse(
                 card.getId(), card.getNameKr(), card.getNameEn(), card.getArcanaType(),
-                card.getSuit(), card.getElement(), card.getImageUrl(), card.getSeoSlug());
+                card.getSuit(), card.getElement(), card.getNumber(), card.getImageUrl(), card.getSeoSlug());
     }
 }
