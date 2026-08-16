@@ -3,6 +3,7 @@ package com.louitarot.chemi.service;
 import com.louitarot.ai.application.port.out.AiInterpretationPort;
 import com.louitarot.auth.entity.UserEntity;
 import com.louitarot.auth.repository.UserJpaRepository;
+import com.louitarot.card.dto.CardBriefResponse;
 import com.louitarot.card.entity.CardEntity;
 import com.louitarot.card.entity.CardInterpretationEntity;
 import com.louitarot.card.repository.CardInterpretationJpaRepository;
@@ -10,6 +11,7 @@ import com.louitarot.card.repository.CardJpaRepository;
 import com.louitarot.chemi.dto.ChemiDrawDetailResponse;
 import com.louitarot.chemi.dto.ChemiDrawSummaryResponse;
 import com.louitarot.chemi.dto.ChemiGuestDrawResponse;
+import com.louitarot.chemi.dto.ChemiRankingItemResponse;
 import com.louitarot.chemi.dto.ChemiResultResponse;
 import com.louitarot.chemi.entity.ChemiCombinationEntity;
 import com.louitarot.chemi.entity.ChemiDrawEntity;
@@ -22,6 +24,8 @@ import com.louitarot.common.exception.ErrorCode;
 import com.louitarot.common.util.SlugGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,6 +130,18 @@ public class ChemiService {
                 draw, card, interpretation, shareUrl,
                 ChemiDrawSummaryResponse.withoutInterpretation(hostDraw, hostCard),
                 new ChemiResultResponse(chemi.getScore(), chemi.getCombination().getInterpretationText()));
+    }
+
+    /** 방장 기준 케미 순위 리스트(2차 기능). 점수 내림차순 — idx_host_score 인덱스를 그대로 탄다. */
+    @Transactional(readOnly = true)
+    public Page<ChemiRankingItemResponse> getRanking(String hostSlug, Pageable pageable) {
+        ChemiDrawEntity hostDraw = chemiDrawJpaRepository.findBySlug(hostSlug)
+                .orElseThrow(() -> new CustomException(ErrorCode.CHEMI_DRAW_NOT_FOUND));
+        return chemiJpaRepository.findByHostDrawIdOrderByScoreDesc(hostDraw.getId(), pageable)
+                .map(chemi -> new ChemiRankingItemResponse(
+                        chemi.getGuestDraw().getNickname(),
+                        CardBriefResponse.from(findCard(chemi.getGuestDraw().getCardId())),
+                        chemi.getScore()));
     }
 
     private CardEntity pickRandomCard() {

@@ -36,6 +36,7 @@ public class SecurityConfig {
                         // 방장 최초 뽑기(POST /chemi-draws)는 로그인 필수라 anyRequest().authenticated()에 그대로 걸림
                         .requestMatchers(HttpMethod.POST, "/api/v1/chemi-draws/*/guests").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/chemi-draws/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/chemi-draws/*/ranking").permitAll()
                         // 개인 카드 뽑기: 결과 공유 링크 조회(GET)는 공개, 뽑기 생성(POST)은 로그인 필수
                         .requestMatchers(HttpMethod.GET, "/api/v1/fortunes/*").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
