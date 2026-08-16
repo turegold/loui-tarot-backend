@@ -3,6 +3,7 @@ package com.louitarot.common.config;
 import com.louitarot.common.security.JwtAuthenticationEntryPoint;
 import com.louitarot.common.security.JwtAuthenticationFilter;
 import com.louitarot.common.security.JwtTokenProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -10,6 +11,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 /**
  * JWT 기반 인증. 카카오 로그인/토큰 재발급 엔드포인트만 공개하고, 나머지 인증 필요 엔드포인트는
@@ -18,6 +24,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final String frontendUrl;
+
+    public SecurityConfig(@Value("${app.frontend-url}") String frontendUrl) {
+        this.frontendUrl = frontendUrl;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -28,6 +40,7 @@ public class SecurityConfig {
         http
                 // 세션/쿠키 기반이 아니라 매 요청 JWT로 인증하는 stateless API라 CSRF 보호가 필요 없다.
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         // [[API 명세]] 기준 인증 불필요 엔드포인트
                         .requestMatchers(HttpMethod.GET, "/api/v1/cards", "/api/v1/cards/**").permitAll()
@@ -49,5 +62,23 @@ public class SecurityConfig {
                         new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    /**
+     * 프론트(app.frontend-url — chemi/fortune의 shareUrl 조합에도 쓰는 같은 값)에서 브라우저로
+     * 직접 fetch할 수 있게 허용한다. 이게 없으면 Authorization 헤더가 실려 있어도 브라우저가
+     * preflight(OPTIONS) 응답에서 Access-Control-Allow-Origin을 못 찾아 요청 자체를 막아버린다
+     * (서버 로그엔 OPTIONS 200이 찍히지만, 그 응답에 CORS 헤더가 없어서 브라우저가 실패시키는 것).
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(frontendUrl));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }
