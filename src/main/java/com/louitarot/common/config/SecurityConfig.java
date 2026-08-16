@@ -32,6 +32,10 @@ public class SecurityConfig {
                         // [[API 명세]] 기준 인증 불필요 엔드포인트
                         .requestMatchers(HttpMethod.GET, "/api/v1/cards", "/api/v1/cards/**").permitAll()
                         .requestMatchers("/api/v1/auth/kakao/callback", "/api/v1/auth/refresh").permitAll()
+                        // 케미 뽑기: 게스트 참여(POST .../guests)와 결과 조회(GET)는 비로그인 공개,
+                        // 방장 최초 뽑기(POST /chemi-draws)는 로그인 필수라 anyRequest().authenticated()에 그대로 걸림
+                        .requestMatchers(HttpMethod.POST, "/api/v1/chemi-draws/*/guests").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/chemi-draws/*").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                         // 그 외는 전부 인증 필요 (예: /api/v1/auth/logout, 앞으로 만들 fortunes/chemi-draws 방장 엔드포인트)
                         .anyRequest().authenticated()

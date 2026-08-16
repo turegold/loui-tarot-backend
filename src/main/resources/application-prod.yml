@@ -29,6 +29,9 @@ ai:
     api-key: ${NVIDIA_API_KEY}
     model: ${NVIDIA_AI_MODEL:google/gemma-4-31b-it}
 
+app:
+  frontend-url: ${FRONTEND_URL}
+
 logging:
   level:
     com.louitarot: INFO

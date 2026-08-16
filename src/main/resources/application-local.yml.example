@@ -34,6 +34,9 @@ ai:
     api-key: your-nvidia-api-key # build.nvidia.com에서 발급
     model: google/gemma-4-31b-it
 
+app:
+  frontend-url: http://localhost:3001
+
 logging:
   level:
     com.louitarot: DEBUG
