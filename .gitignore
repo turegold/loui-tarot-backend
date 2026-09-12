@@ -45,6 +45,7 @@ out/
 # env / secrets (실제 값은 커밋 금지, 필요하면 예시 파일만)
 .env
 *.env
+.env.prod
 application-secret.yml
 application-secret.properties
 application-local.yml
