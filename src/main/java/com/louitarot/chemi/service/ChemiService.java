@@ -1,6 +1,5 @@
 package com.louitarot.chemi.service;
 
-import com.louitarot.ai.application.port.out.AiInterpretationPort;
 import com.louitarot.auth.entity.UserEntity;
 import com.louitarot.auth.repository.UserJpaRepository;
 import com.louitarot.card.dto.CardBriefResponse;
@@ -32,12 +31,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 케미 뽑기(방장/게스트) 오케스트레이션 — 레이어드. 카드/유저 리포지토리를 직접 주입받고,
- * AI 호출은 AiInterpretationPort(헥사고날)로 위임한다 ([[백엔드 설계 원칙]] 1번).
+ * 케미 뽑기(방장/게스트) 오케스트레이션 — 레이어드. 카드/유저 리포지토리를 직접 주입받는다.
+ * 카드 해석·조합 해석 모두 AI를 호출하지 않고 CardInterpretationComposer /
+ * ChemiCombinationInterpretationComposer가 즉시 조합한다([[AI 해석 캐싱 전략]] — AI는 나중에 다시 붙이기로 결정).
  */
 @Service
 public class ChemiService {
@@ -48,7 +47,6 @@ public class ChemiService {
     private final CardJpaRepository cardJpaRepository;
     private final CardInterpretationJpaRepository cardInterpretationJpaRepository;
     private final UserJpaRepository userJpaRepository;
-    private final AiInterpretationPort aiInterpretationPort;
     private final String frontendUrl;
 
     public ChemiService(
@@ -58,7 +56,6 @@ public class ChemiService {
             CardJpaRepository cardJpaRepository,
             CardInterpretationJpaRepository cardInterpretationJpaRepository,
             UserJpaRepository userJpaRepository,
-            AiInterpretationPort aiInterpretationPort,
             @Value("${app.frontend-url}") String frontendUrl
     ) {
         this.chemiDrawJpaRepository = chemiDrawJpaRepository;
@@ -67,7 +64,6 @@ public class ChemiService {
         this.cardJpaRepository = cardJpaRepository;
         this.cardInterpretationJpaRepository = cardInterpretationJpaRepository;
         this.userJpaRepository = userJpaRepository;
-        this.aiInterpretationPort = aiInterpretationPort;
         this.frontendUrl = frontendUrl;
     }
 
@@ -87,14 +83,7 @@ public class ChemiService {
         return ChemiDrawDetailResponse.withoutChemi(draw, card, interpretation, shareUrl(draw.getSlug()));
     }
 
-    /**
-     * 방장의 공유 링크로 들어온 게스트의 뽑기. 뽑는 즉시 host와의 케미도 함께 계산한다.
-     *
-     * 게스트 카드 해석과 케미 조합 해석은 서로 독립적인 AI 호출이라(fortune과 동일한 이유,
-     * 호출 하나당 수 초~십수 초) 순차 실행 대신 병렬로 돌려 응답 시간을 최대 절반으로 줄인다.
-     * DB 접근(캐시 조회/저장)은 트랜잭션이 걸린 메인 스레드에서만 하고, 병렬 스레드는 순수
-     * AI 호출만 하도록 나눴다.
-     */
+    /** 방장의 공유 링크로 들어온 게스트의 뽑기. 뽑는 즉시 host와의 케미도 함께 계산한다. 전부 즉시 계산이라 병렬화가 필요 없다. */
     @Transactional
     public ChemiGuestDrawResponse createGuestDraw(String hostSlug, String nickname, String ipHash) {
         ChemiDrawEntity hostDraw = chemiDrawJpaRepository.findBySlug(hostSlug)
@@ -107,33 +96,13 @@ public class ChemiService {
                 generateUniqueSlug(), null, nickname, guestCard.getId(), guestReversed, ipHash);
         chemiDrawJpaRepository.save(guestDraw);
 
-        // 1) 캐시 조회부터 메인 스레드에서 끝낸다.
-        String cachedGuestText = findCachedCardInterpretation(guestCard, guestReversed);
+        String guestInterpretation = getOrGenerateCardInterpretation(guestCard, guestReversed);
+
         NormalizedPair normalized = normalizeOrder(
                 hostCard.getId(), hostDraw.isReversed(), guestCard.getId(), guestReversed);
-        ChemiCombinationEntity cachedCombination = findCombination(normalized).orElse(null);
         short score = ChemiScoreCalculator.calculate(hostCard, hostDraw.isReversed(), guestCard, guestReversed);
-
-        // 2) 캐시 미스인 것만 병렬로 AI 호출.
-        CompletableFuture<String> guestTextFuture = cachedGuestText != null
-                ? CompletableFuture.completedFuture(cachedGuestText)
-                : CompletableFuture.supplyAsync(() -> generateCardInterpretationText(guestCard, guestReversed));
-        CompletableFuture<String> combinationTextFuture = cachedCombination != null
-                ? CompletableFuture.completedFuture(cachedCombination.getInterpretationText())
-                : CompletableFuture.supplyAsync(() ->
-                        generateCombinationText(hostCard, hostDraw.isReversed(), guestCard, guestReversed, score));
-
-        String guestInterpretation = guestTextFuture.join();
-        String combinationInterpretation = combinationTextFuture.join();
-
-        // 3) 새로 생성된 것만 메인 스레드로 돌아와 캐시에 저장.
-        if (cachedGuestText == null) {
-            cacheCardInterpretation(guestCard, guestReversed, guestInterpretation);
-        }
-        ChemiCombinationEntity combination = cachedCombination != null
-                ? cachedCombination
-                : cacheCombination(hostCard.getId(), hostDraw.isReversed(), guestCard.getId(), guestReversed,
-                        score, combinationInterpretation, normalized);
+        ChemiCombinationEntity combination = getOrGenerateCombination(
+                hostCard, hostDraw.isReversed(), guestCard, guestReversed, score, normalized);
 
         chemiJpaRepository.save(new ChemiEntity(hostDraw, guestDraw, combination, combination.getScore()));
 
@@ -207,13 +176,13 @@ public class ChemiService {
         return frontendUrl + "/chemi/" + slug;
     }
 
-    /** 순차 경로(방장 뽑기, 단건 조회)용 — 캐시 조회, 미스면 생성+저장까지 한 번에. */
+    /** 캐시 조회, 미스면 조합+저장까지 한 번에. */
     private String getOrGenerateCardInterpretation(CardEntity card, boolean reversed) {
         String cachedText = findCachedCardInterpretation(card, reversed);
         if (cachedText != null) {
             return cachedText;
         }
-        String text = generateCardInterpretationText(card, reversed);
+        String text = CardInterpretationComposer.compose(card, reversed);
         cacheCardInterpretation(card, reversed, text);
         return text;
     }
@@ -225,14 +194,7 @@ public class ChemiService {
                 .orElse(null);
     }
 
-    /** 순수 AI 호출만. DB에 손대지 않아 병렬 스레드에서 안전하게 실행할 수 있다. */
-    private String generateCardInterpretationText(CardEntity card, boolean reversed) {
-        String prompt = "당신은 타로 카드 해석가입니다. '%s' 카드가 %s으로 나왔을 때의 일반적인 의미를 2~3문장으로 해석해주세요."
-                .formatted(card.getNameKr(), reversed ? "역방향" : "정방향");
-        return aiInterpretationPort.generate(prompt);
-    }
-
-    /** 새로 생성된 해석을 캐시에 저장 — 반드시 메인(트랜잭션) 스레드에서 호출해야 한다. */
+    /** 새로 생성된 해석을 캐시에 저장. */
     private void cacheCardInterpretation(CardEntity card, boolean reversed, String text) {
         try {
             cardInterpretationJpaRepository.save(new CardInterpretationEntity(card.getId(), reversed, text));
@@ -244,20 +206,18 @@ public class ChemiService {
         }
     }
 
-    /** 순수 AI 호출만(점수는 이미 계산돼 있다고 가정). DB에 손대지 않는다. */
-    private String generateCombinationText(
-            CardEntity cardA, boolean reversedA, CardEntity cardB, boolean reversedB, short score) {
-        String prompt = """
-                당신은 타로 궁합 해석가입니다. 두 사람이 각각 뽑은 카드는 '%s'(%s)와 '%s'(%s)이고, \
-                궁합 점수는 %d점으로 '%s' 등급입니다. 두 사람의 케미를 2~3문장으로 따뜻하고 재미있게 해석해주세요.\
-                """.formatted(
-                        cardA.getNameKr(), reversedA ? "역방향" : "정방향",
-                        cardB.getNameKr(), reversedB ? "역방향" : "정방향",
-                        score, toneLabel(score));
-        return aiInterpretationPort.generate(prompt);
+    /** 캐시 조회, 미스면 조합+저장까지 한 번에. */
+    private ChemiCombinationEntity getOrGenerateCombination(
+            CardEntity cardA, boolean reversedA, CardEntity cardB, boolean reversedB, short score, NormalizedPair normalized) {
+        ChemiCombinationEntity cached = findCombination(normalized).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+        String text = ChemiCombinationInterpretationComposer.compose(cardA, reversedA, cardB, reversedB, score);
+        return cacheCombination(cardA.getId(), reversedA, cardB.getId(), reversedB, score, text, normalized);
     }
 
-    /** 새로 생성된 조합 해석을 캐시에 저장 — 반드시 메인(트랜잭션) 스레드에서 호출해야 한다. */
+    /** 새로 생성된 조합 해석을 캐시에 저장. */
     private ChemiCombinationEntity cacheCombination(
             Short cardAId, boolean reversedA, Short cardBId, boolean reversedB,
             short score, String text, NormalizedPair normalized) {
@@ -284,21 +244,5 @@ public class ChemiService {
         return inOrder
                 ? new NormalizedPair(cardAId, reversedA, cardBId, reversedB)
                 : new NormalizedPair(cardBId, reversedB, cardAId, reversedA);
-    }
-
-    private String toneLabel(short score) {
-        if (score >= 90) {
-            return "천생연분";
-        }
-        if (score >= 70) {
-            return "잘 맞음";
-        }
-        if (score >= 50) {
-            return "무난";
-        }
-        if (score >= 30) {
-            return "노력 필요";
-        }
-        return "상극";
     }
 }
