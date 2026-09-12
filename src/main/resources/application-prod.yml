@@ -26,7 +26,8 @@ kakao:
 
 ai:
   nvidia:
-    api-key: ${NVIDIA_API_KEY}
+    # AI 호출은 현재 템플릿 조합으로 대체돼 있어(NvidiaAiAdapter 미사용) 값이 없어도 기동엔 문제없다.
+    api-key: ${NVIDIA_API_KEY:unused-ai-disabled}
     model: ${NVIDIA_AI_MODEL:google/gemma-4-31b-it}
 
 app:

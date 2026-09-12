@@ -1,0 +1,12 @@
+build/
+.gradle/
+.idea/
+*.iml
+.git/
+
+# 로컬 전용 시크릿 — 이미지에 절대 들어가면 안 됨
+src/main/resources/application-local.yml
+src/main/resources/application-local.yml.example
+
+# 운영 배포 시크릿(.env.prod)도 이미지 빌드 컨텍스트엔 필요 없음 — docker-compose가 런타임에 주입
+.env.prod
