@@ -26,9 +26,15 @@ import java.util.List;
 public class SecurityConfig {
 
     private final String frontendUrl;
+    /** 같은 와이파이의 휴대폰 등으로 모바일 테스트할 때만 채우는 로컬 전용 값 — 비어 있으면 무시. */
+    private final String frontendLanUrl;
 
-    public SecurityConfig(@Value("${app.frontend-url}") String frontendUrl) {
+    public SecurityConfig(
+            @Value("${app.frontend-url}") String frontendUrl,
+            @Value("${app.frontend-lan-url:}") String frontendLanUrl
+    ) {
         this.frontendUrl = frontendUrl;
+        this.frontendLanUrl = frontendLanUrl;
     }
 
     @Bean
@@ -72,8 +78,12 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        List<String> allowedOrigins = frontendLanUrl.isBlank()
+                ? List.of(frontendUrl)
+                : List.of(frontendUrl, frontendLanUrl);
+
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(frontendUrl));
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 

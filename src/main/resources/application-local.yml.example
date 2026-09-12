@@ -36,6 +36,8 @@ ai:
 
 app:
   frontend-url: http://localhost:3001
+  # 같은 와이파이의 휴대폰 등으로 모바일 테스트할 때만 채운다 (선택, 비우면 무시됨).
+  # frontend-lan-url: http://<이 머신의 로컬 IP>:3001
 
 logging:
   level:
