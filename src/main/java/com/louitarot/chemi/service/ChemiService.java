@@ -107,7 +107,7 @@ public class ChemiService {
         chemiJpaRepository.save(new ChemiEntity(hostDraw, guestDraw, combination, combination.getScore()));
 
         return new ChemiGuestDrawResponse(
-                ChemiDrawSummaryResponse.of(guestDraw, guestCard, guestInterpretation),
+                ChemiDrawSummaryResponse.of(guestDraw, guestCard, guestInterpretation, shareUrl(guestDraw.getSlug())),
                 ChemiDrawSummaryResponse.withoutInterpretation(hostDraw, hostCard),
                 new ChemiResultResponse(combination.getScore(), combination.getInterpretationText()));
     }
