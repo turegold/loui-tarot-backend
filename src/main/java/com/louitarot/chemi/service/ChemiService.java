@@ -2,6 +2,7 @@ package com.louitarot.chemi.service;
 
 import com.louitarot.auth.entity.UserEntity;
 import com.louitarot.auth.repository.UserJpaRepository;
+import com.louitarot.card.domain.CardInterpretationComposer;
 import com.louitarot.card.dto.CardBriefResponse;
 import com.louitarot.card.entity.CardEntity;
 import com.louitarot.card.entity.CardInterpretationEntity;

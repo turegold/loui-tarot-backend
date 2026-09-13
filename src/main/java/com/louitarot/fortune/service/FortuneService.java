@@ -2,6 +2,7 @@ package com.louitarot.fortune.service;
 
 import com.louitarot.auth.entity.UserEntity;
 import com.louitarot.auth.repository.UserJpaRepository;
+import com.louitarot.card.domain.CardTopicInterpretationComposer;
 import com.louitarot.card.dto.CardBriefResponse;
 import com.louitarot.card.entity.CardEntity;
 import com.louitarot.card.entity.CardTopicInterpretationEntity;
