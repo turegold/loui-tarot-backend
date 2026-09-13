@@ -2,14 +2,19 @@
 # RDS로 분리했으니 이 파일엔 MySQL 컨테이너가 없다. Redis는 리프레시 토큰 저장용으로만
 # 쓰여서(RefreshTokenService) 가볍고, 같은 EC2에 컨테이너로 띄워도 부담이 없다.
 #
-# 사용법 (EC2에서):
+# 이미지는 EC2에서 빌드하지 않는다 — t4g.micro/t3.micro에서 Gradle로 직접 빌드하면
+# CPU 크레딧/메모리가 바닥나서 SSM 연결까지 끊길 정도로 불안정했다(실제로 겪음).
+# 대신 GitHub Actions가 빌드해서 GHCR(ghcr.io)에 올려두고, 여기서는 pull만 한다.
+#
+# 사용법 (EC2에서, 최초 1회):
 #   1. 이 리포를 clone
 #   2. .env.prod.example을 .env.prod로 복사하고 실제 값 채우기 (커밋 금지)
-#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+#   4. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# 이후 배포는 GitHub Actions(.github/workflows/deploy.yml)가 SSM으로 3~4번을 대신 실행한다.
 services:
   backend:
-    build: .
-    image: loui-tarot-backend:latest
+    image: ghcr.io/turegold/loui-tarot-backend:latest
     container_name: loui-tarot-backend
     restart: unless-stopped
     ports:
