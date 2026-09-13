@@ -1,7 +1,5 @@
-package com.louitarot.fortune.service;
+package com.louitarot.card.domain;
 
-import com.louitarot.card.domain.CardEssence;
-import com.louitarot.card.domain.CardEssenceCatalog;
 import com.louitarot.card.entity.CardEntity;
 import com.louitarot.common.domain.Topic;
 
@@ -9,7 +7,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 개인 카드 뽑기용 카드 한 장 + 주제 해석을 AI 호출 없이 즉시 조합한다.
+ * 개인 카드 뽑기용/카드 상세 페이지용 카드 한 장 + 주제 해석을 AI 호출 없이 즉시 조합한다.
  * card_topic_interpretations 캐시가 (카드, 방향, 주제) 조합당 한 번만 저장하므로, 여기서
  * 무작위로 고른 문구가 그대로 영구 캐싱된다 — [[AI 해석 캐싱 전략]].
  */
